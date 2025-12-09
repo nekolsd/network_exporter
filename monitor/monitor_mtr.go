@@ -208,7 +208,9 @@ func (p *MTR) CheckActiveTargets() (err error) {
 			}
 			ipAddrs, err := common.DestAddrs(context.Background(), target.Host, p.resolver.Resolver, p.resolver.Timeout, p.ipv6)
 			if err != nil || len(ipAddrs) == 0 {
-				return err
+				// Skip this target on DNS failure, don't abort the entire check
+				p.logger.Warn("DNS resolution failed, keeping existing target", "type", "MTR", "func", "CheckActiveTargets", "host", target.Host, "err", err)
+				continue
 			}
 
 			if !common.ContainsString(ipAddrs, targetIp) {

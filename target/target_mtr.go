@@ -57,7 +57,10 @@ func NewMTR(logger *slog.Logger, icmpID *common.IcmpID, startupDelay time.Durati
 		maxConcurrentJobs: maxConcurrentJobs,
 		labels:            labels,
 		stop:              make(chan struct{}),
-		result:            &mtr.MtrResult{HopSummaryMap: map[string]*common.IcmpSummary{}},
+		result: &mtr.MtrResult{
+			DestAddr:      host,
+			HopSummaryMap: map[string]*common.IcmpSummary{},
+		},
 	}
 	t.wg.Add(1)
 	go t.run(startupDelay)

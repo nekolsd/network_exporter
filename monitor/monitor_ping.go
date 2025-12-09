@@ -142,12 +142,28 @@ func (p *PING) DelTargets() {
 		}
 	}
 
+	// Build a set of target names that are still in config (regardless of DNS resolution)
+	targetNamesInConfig := make(map[string]bool)
+	for _, v := range p.sc.Cfg.Targets {
+		if v.Type == "ICMP" || v.Type == "ICMP+MTR" {
+			targetNamesInConfig[v.Name] = true
+		}
+	}
+
 	targetConfigTmp := []string{}
 	for _, v := range p.sc.Cfg.Targets {
 		if v.Type == "ICMP" || v.Type == "ICMP+MTR" {
 			ipAddrs, err := common.DestAddrs(context.Background(), v.Host, p.resolver.Resolver, p.resolver.Timeout, p.ipv6)
 			if err != nil || len(ipAddrs) == 0 {
-				p.logger.Warn("Skipping resolve target", "type", "ICMP", "func", "DelTargets", "host", v.Host, "err", err)
+				p.logger.Warn("DNS resolution failed, preserving existing targets", "type", "ICMP", "func", "DelTargets", "host", v.Host, "err", err)
+				// On DNS failure, preserve any active targets with matching name prefix
+				// This prevents deleting targets just because DNS temporarily failed
+				for _, activeName := range targetActiveTmp {
+					if strings.HasPrefix(activeName, v.Name+" ") {
+						targetConfigTmp = common.AppendIfMissing(targetConfigTmp, activeName)
+					}
+				}
+				continue
 			}
 			for _, ipAddr := range ipAddrs {
 				targetConfigTmp = common.AppendIfMissing(targetConfigTmp, v.Name+" "+ipAddr)
@@ -162,7 +178,12 @@ func (p *PING) DelTargets() {
 				continue
 			}
 			if t.Name() == targetName {
-				p.RemoveTarget(targetName)
+				// Only delete if the target name prefix is no longer in config
+				// Extract the name part (before the IP)
+				namePart := strings.SplitN(targetName, " ", 2)[0]
+				if !targetNamesInConfig[namePart] {
+					p.RemoveTarget(targetName)
+				}
 			}
 		}
 	}
@@ -205,7 +226,9 @@ func (p *PING) CheckActiveTargets() (err error) {
 			}
 			ipAddrs, err := common.DestAddrs(context.Background(), target.Host, p.resolver.Resolver, p.resolver.Timeout, p.ipv6)
 			if err != nil || len(ipAddrs) == 0 {
-				return err
+				// Skip this target on DNS failure, don't abort the entire check
+				p.logger.Warn("DNS resolution failed, keeping existing target", "type", "ICMP", "func", "CheckActiveTargets", "host", target.Host, "err", err)
+				continue
 			}
 
 			if !common.ContainsString(ipAddrs, targetIp) {

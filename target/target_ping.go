@@ -54,7 +54,10 @@ func NewPing(logger *slog.Logger, icmpID *common.IcmpID, startupDelay time.Durat
 		maxConcurrentJobs: maxConcurrentJobs,
 		labels:            labels,
 		stop:              make(chan struct{}),
-		result:            &ping.PingResult{},
+		result: &ping.PingResult{
+			DestAddr: host,
+			DestIp:   ip,
+		},
 	}
 	t.wg.Add(1)
 	go t.run(startupDelay)
