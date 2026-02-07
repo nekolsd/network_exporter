@@ -52,6 +52,7 @@ var (
 	monitorPING    *monitor.PING
 	monitorMTR     *monitor.MTR
 	monitorTCP     *monitor.TCPPort
+	monitorTCPPing *monitor.TCPPing
 	monitorHTTPGet *monitor.HTTPGet
 
 	indexHTML = `<!doctype html><html><head> <meta charset="UTF-8"><title>Network Exporter (Version ` + version + `)</title></head><body><h1>Network Exporter</h1><p><a href="%s">Metrics</a></p></body></html>`
@@ -109,6 +110,9 @@ func main() {
 	monitorTCP = monitor.NewTCPPort(logger, sc, resolver, *enableIpv6, *maxConcurrentJobs)
 	go monitorTCP.AddTargets()
 
+	monitorTCPPing = monitor.NewTCPPing(logger, sc, resolver, *enableIpv6, *maxConcurrentJobs)
+	go monitorTCPPing.AddTargets()
+
 	monitorHTTPGet = monitor.NewHTTPGet(logger, sc, resolver, *maxConcurrentJobs)
 	go monitorHTTPGet.AddTargets()
 
@@ -141,6 +145,9 @@ func startConfigRefresh() {
 		monitorTCP.DelTargets()
 		_ = monitorTCP.CheckActiveTargets()
 		monitorTCP.AddTargets()
+		monitorTCPPing.DelTargets()
+		_ = monitorTCPPing.CheckActiveTargets()
+		monitorTCPPing.AddTargets()
 		monitorHTTPGet.DelTargets()
 		monitorHTTPGet.AddTargets()
 	}
@@ -156,6 +163,7 @@ func startServer() {
 	reg.MustRegister(&collector.MTR{Monitor: monitorMTR})
 	reg.MustRegister(&collector.PING{Monitor: monitorPING})
 	reg.MustRegister(&collector.TCP{Monitor: monitorTCP})
+	reg.MustRegister(&collector.TCPPingCollector{Monitor: monitorTCPPing})
 	reg.MustRegister(&collector.HTTPGet{Monitor: monitorHTTPGet})
 	h := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 	mux.Handle(webMetricsPath, h)

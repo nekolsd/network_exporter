@@ -36,6 +36,9 @@ func reloadSignal() {
 				monitorTCP.DelTargets()
 				_ = monitorTCP.CheckActiveTargets()
 				monitorTCP.AddTargets()
+				monitorTCPPing.DelTargets()
+				_ = monitorTCPPing.CheckActiveTargets()
+				monitorTCPPing.AddTargets()
 				monitorHTTPGet.DelTargets()
 				monitorHTTPGet.AddTargets()
 			case <-susr:
@@ -43,6 +46,7 @@ func reloadSignal() {
 				fmt.Printf("PING: %+v\n", monitorPING)
 				fmt.Printf("MTR: %+v\n", monitorMTR)
 				fmt.Printf("TCP: %+v\n", monitorTCP)
+				fmt.Printf("TCPPing: %+v\n", monitorTCPPing)
 				fmt.Printf("HTTPGet: %+v\n", monitorHTTPGet)
 			}
 		}

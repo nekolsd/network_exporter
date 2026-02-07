@@ -41,6 +41,12 @@ type TCP struct {
 	Timeout  duration `yaml:"timeout" json:"timeout" default:"4s"`
 }
 
+type TCPPing struct {
+	Interval duration `yaml:"interval" json:"interval" default:"5s"`
+	Timeout  duration `yaml:"timeout" json:"timeout" default:"4s"`
+	Count    int      `yaml:"count" json:"count" default:"10"`
+}
+
 type MTR struct {
 	Interval    duration `yaml:"interval" json:"interval" default:"5s"`
 	Timeout     duration `yaml:"timeout" json:"timeout" default:"4s"`
@@ -69,6 +75,7 @@ type Config struct {
 	ICMP    `yaml:"icmp" json:"icmp"`
 	MTR     `yaml:"mtr" json:"mtr"`
 	TCP     `yaml:"tcp" json:"tcp"`
+	TCPPing `yaml:"tcp_ping" json:"tcp_ping"`
 	HTTPGet `yaml:"http_get" json:"http_get"`
 	Targets `yaml:"targets" json:"targets"`
 }
@@ -186,7 +193,7 @@ func (sc *SafeConfig) ReloadConfig(logger *slog.Logger, confFile string, confFil
 
 	// Validate and Filter config
 	targets := Targets{}
-	re := regexp.MustCompile("^ICMP|MTR|ICMP+MTR|TCP|HTTPGet$")
+	re := regexp.MustCompile("^ICMP|MTR|ICMP+MTR|TCP|TCPPing|HTTPGet$")
 	for _, t := range c.Targets {
 		if common.SrvRecordCheck(t.Host) {
 			found := re.MatchString(t.Type)
@@ -194,10 +201,11 @@ func (sc *SafeConfig) ReloadConfig(logger *slog.Logger, confFile string, confFil
 				logger.Error("Unknown check type", "type", "Config", "func", "ReloadConfig", "target", t.Name, "check_type", t.Type, "allowed", "(ICMP|MTR|ICMP+MTR|TCP|HTTPGet)")
 				continue
 			}
-			// Check that SRV record's type is TCP, if config's type is TCP
-			if t.Type == "TCP" {
-				if !strings.EqualFold(t.Type, strings.Split(t.Host, ".")[1][1:]) {
-					logger.Error("Target type doesn't match SRV record protocol", "type", "Config", "func", "ReloadConfig", "target", t.Name, "check_type", t.Type, "srv_proto", strings.Split(t.Host, ".")[1][1:])
+			// Check that SRV record's type is TCP, if config's type is TCP or TCPPing
+			if t.Type == "TCP" || t.Type == "TCPPing" {
+				srvProto := strings.Split(t.Host, ".")[1][1:]
+				if !strings.EqualFold("tcp", srvProto) {
+					logger.Error("Target type doesn't match SRV record protocol", "type", "Config", "func", "ReloadConfig", "target", t.Name, "check_type", t.Type, "srv_proto", srvProto)
 					continue
 				}
 			}
@@ -254,8 +262,8 @@ func (sc *SafeConfig) ReloadConfig(logger *slog.Logger, confFile string, confFil
 	}
 
 	// Config precheck
-	if c.ICMP.Interval <= 0 || c.MTR.Interval <= 0 || c.TCP.Interval <= 0 || c.HTTPGet.Interval <= 0 {
-		return fmt.Errorf("intervals (icmp,mtr,tcp,http_get) must be >0")
+	if c.ICMP.Interval <= 0 || c.MTR.Interval <= 0 || c.TCP.Interval <= 0 || c.TCPPing.Interval <= 0 || c.HTTPGet.Interval <= 0 {
+		return fmt.Errorf("intervals (icmp,mtr,tcp,tcp_ping,http_get) must be >0")
 	}
 	if c.MTR.MaxHops < 0 || c.MTR.MaxHops > 65500 {
 		return fmt.Errorf("mtr.max-hops must be between 0 and 65500")
@@ -265,6 +273,9 @@ func (sc *SafeConfig) ReloadConfig(logger *slog.Logger, confFile string, confFil
 	}
 	if c.MTR.Protocol != "icmp" && c.MTR.Protocol != "tcp" {
 		return fmt.Errorf("mtr.protocol must be 'icmp' or 'tcp'")
+	}
+	if c.TCPPing.Count < 0 || c.TCPPing.Count > 65500 {
+		return fmt.Errorf("tcp_ping.count must be between 0 and 65500")
 	}
 
 	sc.Lock()
@@ -302,6 +313,7 @@ func (d *duration) Set(dur time.Duration) {
 func HasDuplicateTargets(m Targets) (bool, error) {
 	tmp := map[string]map[string]bool{
 		"TCP":     make(map[string]bool),
+		"TCPPing": make(map[string]bool),
 		"ICMP":    make(map[string]bool),
 		"MTR":     make(map[string]bool),
 		"HTTPGet": make(map[string]bool),

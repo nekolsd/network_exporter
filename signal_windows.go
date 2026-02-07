@@ -33,6 +33,9 @@ func reloadSignal() {
 					monitorTCP.DelTargets()
 					_ = monitorTCP.CheckActiveTargets()
 					monitorTCP.AddTargets()
+					monitorTCPPing.DelTargets()
+					_ = monitorTCPPing.CheckActiveTargets()
+					monitorTCPPing.AddTargets()
 					monitorHTTPGet.DelTargets()
 					monitorHTTPGet.AddTargets()
 				}
